@@ -70,6 +70,7 @@ func (o *OmsLogger) postData(now time.Time, body []byte, logType string) (n int,
 	req.Header.Add("Authorization", signature)
 	req.Header.Add("Log-Type", logType)
 	req.Header.Add("x-ms-date", rfc1123date)
+	req.Header.Add("time-generated-field", "time_generated")
 
 	if _, err := client.Do(req); err != nil {
 		return 0, err

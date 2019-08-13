@@ -9,13 +9,14 @@ import (
 const ginPattern = `\[GIN\]\s+\d{4}\/\d{2}\/\d{2}\s+-\s+\d{2}:\d{2}:\d{2}\s+\|([[:cntrl:]]?\[\d+;\d+m)?\s+(\d{3})\s+([[:cntrl:]]?\[0m)?\|\s+([\d\.]{1,13})(\p{L}?s)`
 
 type logEntry struct {
-	Msg     string   `json:"log"`
-	Latency *float64 `json:"latency,omitempty"`
-	Status  *int     `json:"http_status,omitempty"`
+	Msg           string    `json:"log"`
+	TimeGenerated time.Time `json:"time_generated"`
+	Latency       *float64  `json:"latency,omitempty"`
+	Status        *int      `json:"http_status,omitempty"`
 }
 
 func (o *OmsLogger) writeHTTP(now time.Time, p []byte, httpStatus int, latency float64) (n int, err error) {
-	l := logEntry{Msg: string(p), Latency: &latency, Status: &httpStatus}
+	l := logEntry{Msg: string(p), TimeGenerated: now, Latency: &latency, Status: &httpStatus}
 	data, err := json.Marshal(l)
 	if err != nil {
 		return 0, err
@@ -24,7 +25,7 @@ func (o *OmsLogger) writeHTTP(now time.Time, p []byte, httpStatus int, latency f
 }
 
 func (o *OmsLogger) writeLogs(now time.Time, p []byte) (n int, err error) {
-	l := logEntry{Msg: string(p)}
+	l := logEntry{Msg: string(p), TimeGenerated: now}
 	data, err := json.Marshal(l)
 	if err != nil {
 		return 0, err
