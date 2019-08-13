@@ -96,6 +96,9 @@ func (o *OmsLogger) run() {
 		select {
 		case <-tick:
 			for logType, entries := range o.batches {
+				if len(entries) == 0 {
+					continue
+				}
 				data, _ := json.Marshal(entries)
 				o.postData(data, logType)
 			}
