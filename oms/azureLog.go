@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-const ginPattern = `\[GIN\]\s+\d{4}\/\d{2}\/\d{2}\s+-\s+\d{2}:\d{2}:\d{2}\s+\|([[:cntrl:]]?\[\d+;\d+m)?\s+(\d{3})\s+[[:cntrl:]]?\[0m\|\s+([\d\.]{1,13})(\p{L}?s)`
+const ginPattern = `\[GIN\]\s+\d{4}\/\d{2}\/\d{2}\s+-\s+\d{2}:\d{2}:\d{2}\s+\|([[:cntrl:]]?\[\d+;\d+m)?\s+(\d{3})\s+([[:cntrl:]]?\[0m)?\|\s+([\d\.]{1,13})(\p{L}?s)`
 
 type OmsLogger struct {
 	CustomerId string
