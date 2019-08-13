@@ -5,6 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -12,30 +13,41 @@ import (
 	"time"
 )
 
+var (
+	updatePeriod = time.Minute
+)
+
 type OmsLogger struct {
 	CustomerId    string
 	SharedKey     string
-	LogTypes      []string
+	LogTypes      []LogType
 	GinLogMatcher *regexp.Regexp
+
+	queue   chan logEntry
+	batches map[LogType][]*logEntry
 }
 
-func NewOmsLogger(customerId, sharedKey, logType string) *OmsLogger {
-	return &OmsLogger{
+func NewOmsLogger(customerId, sharedKey, logTypePrefix LogType) *OmsLogger {
+	logger := &OmsLogger{
 		CustomerId:    customerId,
 		SharedKey:     sharedKey,
-		LogTypes:      []string{fmt.Sprintf("%s_LOGS", logType), fmt.Sprintf("%s_HTTP", logType)},
+		LogTypes:      []LogType{fmt.Sprintf("%s_LOGS", logTypePrefix), fmt.Sprintf("%s_HTTP", logTypePrefix)},
 		GinLogMatcher: regexp.MustCompile(ginPattern),
+
+		queue:   make(chan logEntry),
+		batches: make(map[LogType][]*logEntry),
 	}
+	go logger.run()
+	return logger
 }
 
 func (o *OmsLogger) Write(p []byte) (n int, err error) {
-	now := time.Now()
 	matches := o.GinLogMatcher.FindStringSubmatch(string(p))
 	if len(matches) > 0 {
 		httpStatus, latency := parseFromGinLog(matches)
-		return o.writeHTTP(now, p, httpStatus, latency)
+		return o.writeLogs(p, o.LogTypes[1], WithHttpStatus(httpStatus), WithLatency(latency))
 	}
-	return o.writeLogs(now, p)
+	return o.writeLogs(p, o.LogTypes[0])
 }
 
 func (o *OmsLogger) buildSignature(date string, length int, method string, contentType string, resource string) string {
@@ -50,13 +62,13 @@ func (o *OmsLogger) buildSignature(date string, length int, method string, conte
 	return authorization
 }
 
-func (o *OmsLogger) postData(now time.Time, body []byte, logType string) (n int, err error) {
+func (o *OmsLogger) postData(body []byte, logType LogType) (n int, err error) {
 	contentType := "application/json"
 	resource := "/api/logs"
 	contentLength := len(body)
 
 	// Azure doesn't support UTC so we need to change it to GMT
-	rfc1123date := strings.Replace(now.UTC().Format(time.RFC1123), "UTC", "GMT", 1)
+	rfc1123date := strings.Replace(time.Now().UTC().Format(time.RFC1123), "UTC", "GMT", 1)
 	// Build signature
 	signature := o.buildSignature(rfc1123date, contentLength, http.MethodPost, contentType, resource)
 	uri := fmt.Sprintf("https://%s.ods.opinsights.azure.com%s?api-version=2016-04-01", o.CustomerId, resource)
@@ -76,4 +88,21 @@ func (o *OmsLogger) postData(now time.Time, body []byte, logType string) (n int,
 		return 0, err
 	}
 	return contentLength, nil
+}
+
+func (o *OmsLogger) run() {
+	tick := time.Tick(updatePeriod)
+	for {
+		select {
+		case <-tick:
+			for logType, entries := range o.batches {
+				data, _ := json.Marshal(entries)
+				o.postData(data, logType)
+			}
+			o.batches = make(map[LogType][]*logEntry)
+
+		case log := <-o.queue:
+			o.batches[log.LogType] = append(o.batches[log.LogType], &log)
+		}
+	}
 }

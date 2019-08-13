@@ -1,37 +1,28 @@
 package oms
 
 import (
-	"encoding/json"
 	"strconv"
 	"time"
 )
 
 const ginPattern = `\[GIN\]\s+\d{4}\/\d{2}\/\d{2}\s+-\s+\d{2}:\d{2}:\d{2}\s+\|([[:cntrl:]]?\[\d+;\d+m)?\s+(\d{3})\s+([[:cntrl:]]?\[0m)?\|\s+([\d\.]{1,13})(\p{L}?s)`
 
+type LogType = string
+
 type logEntry struct {
 	Msg           string    `json:"log"`
 	TimeGenerated time.Time `json:"time_generated"`
 	Latency       *float64  `json:"latency,omitempty"`
 	Status        *int      `json:"http_status,omitempty"`
+	LogType       LogType   `json:"-"`
 }
 
-func (o *OmsLogger) writeHTTP(now time.Time, p []byte, httpStatus int, latency float64) (n int, err error) {
-	l := logEntry{Msg: string(p), TimeGenerated: now, Latency: &latency, Status: &httpStatus}
-	data, err := json.Marshal(l)
-	if err != nil {
-		return 0, err
+func (o *OmsLogger) writeLogs(p []byte, logType LogType, options ...option) (n int, err error) {
+	l := logEntry{Msg: string(p), TimeGenerated: time.Now(), LogType: logType}
+	for _, setter := range options {
+		setter(&l)
 	}
-	return o.postData(now, data, o.LogTypes[1])
-}
-
-func (o *OmsLogger) writeLogs(now time.Time, p []byte) (n int, err error) {
-	l := logEntry{Msg: string(p), TimeGenerated: now}
-	data, err := json.Marshal(l)
-	if err != nil {
-		return 0, err
-	}
-	// We don't want to block the running services by sending logs to OMS
-	go o.postData(now, data, o.LogTypes[0])
+	o.queue <- l
 	return len(p), nil
 }
 
