@@ -13,6 +13,13 @@ import (
 	"time"
 )
 
+const (
+	// bufferSize is for creating a buffered channel that could
+	// prevent blocking the log Writer when we are trying to send
+	// logs to Azure.
+	bufferSize = 100
+)
+
 var (
 	updatePeriod = time.Minute
 )
@@ -34,7 +41,7 @@ func NewOmsLogger(customerId, sharedKey, logTypePrefix LogType) *OmsLogger {
 		LogTypes:      []LogType{fmt.Sprintf("%s_LOGS", logTypePrefix), fmt.Sprintf("%s_HTTP", logTypePrefix)},
 		GinLogMatcher: regexp.MustCompile(ginPattern),
 
-		queue:   make(chan logEntry),
+		queue:   make(chan logEntry, bufferSize),
 		batches: make(map[LogType][]*logEntry),
 	}
 	go logger.run()
