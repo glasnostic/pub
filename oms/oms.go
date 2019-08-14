@@ -2,6 +2,7 @@ package oms
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
@@ -13,11 +14,16 @@ import (
 	"time"
 )
 
-const (
+var (
 	// bufferSize is for creating a buffered channel that could
-	// prevent blocking the log Writer when we are trying to send
+	// prevent blocking the log writer when we are trying to send
 	// logs to Azure.
-	bufferSize = 100
+	// Thinking of how many logging messages we will receive
+	// in a time duration "updateTimeout".
+	bufferSize = 1024
+	// updateTimeout for preventing sending logs to Azure takes too
+	// much time and eventually blocks the log writer.
+	updateTimeout = time.Second * 10
 )
 
 var (
@@ -69,7 +75,7 @@ func (o *OmsLogger) buildSignature(date string, length int, method string, conte
 	return authorization
 }
 
-func (o *OmsLogger) postData(body []byte, logType LogType) (n int, err error) {
+func (o *OmsLogger) postData(body []byte, logType LogType) error {
 	contentType := "application/json"
 	resource := "/api/logs"
 	contentLength := len(body)
@@ -83,8 +89,11 @@ func (o *OmsLogger) postData(body []byte, logType LogType) (n int, err error) {
 	client := &http.Client{}
 	req, err := http.NewRequest(http.MethodPost, uri, bytes.NewBuffer(body))
 	if err != nil {
-		return 0, err
+		return err
 	}
+	ctx, _ := context.WithTimeout(context.Background(), updateTimeout)
+	req = req.WithContext(ctx)
+
 	req.Header.Add("content-type", contentType)
 	req.Header.Add("Authorization", signature)
 	req.Header.Add("Log-Type", logType)
@@ -92,9 +101,9 @@ func (o *OmsLogger) postData(body []byte, logType LogType) (n int, err error) {
 	req.Header.Add("time-generated-field", "time_generated")
 
 	if _, err := client.Do(req); err != nil {
-		return 0, err
+		return err
 	}
-	return contentLength, nil
+	return nil
 }
 
 func (o *OmsLogger) run() {
@@ -106,10 +115,18 @@ func (o *OmsLogger) run() {
 				if len(entries) == 0 {
 					continue
 				}
-				data, _ := json.Marshal(entries)
-				o.postData(data, logType)
+				data, err := json.Marshal(entries)
+				if err != nil {
+					continue
+				}
+				if err := o.postData(data, logType); err != nil {
+					continue
+				}
+				// FIXME: what if we keep failing sending logs to Azure?
+				// These batches will not be cleaned up so the memory usage
+				// will increase.
+				o.batches[logType] = make([]*logEntry, 0, len(entries))
 			}
-			o.batches = make(map[LogType][]*logEntry)
 
 		case log := <-o.queue:
 			o.batches[log.LogType] = append(o.batches[log.LogType], &log)
