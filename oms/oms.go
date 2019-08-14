@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"regexp"
 	"strings"
@@ -120,11 +121,8 @@ func (o *OmsLogger) run() {
 					continue
 				}
 				if err := o.postData(data, logType); err != nil {
-					continue
+					log.Println("[OMS] Failed to send log messages to Azure:", err)
 				}
-				// FIXME: what if we keep failing sending logs to Azure?
-				// These batches will not be cleaned up so the memory usage
-				// will increase.
 				o.batches[logType] = make([]*logEntry, 0, len(entries))
 			}
 
