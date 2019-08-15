@@ -33,10 +33,10 @@ func parseFromGinLog(matches []string) (int, float64) {
 	}
 
 	latency := 0.0
-	if l, err := strconv.ParseFloat(matches[3], 64); err == nil {
+	if l, err := strconv.ParseFloat(matches[4], 64); err == nil {
 		latency = l
 		// convert time unit to ms
-		switch matches[3] {
+		switch matches[5] {
 		case "ns":
 			latency = latency / 1000 / 1000
 		case "µs":
