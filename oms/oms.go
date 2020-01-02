@@ -56,10 +56,9 @@ func NewOmsLogger(customerId, sharedKey, logTypePrefix LogType) *OmsLogger {
 }
 
 func (o *OmsLogger) Write(p []byte) (n int, err error) {
-	matches := o.GinLogMatcher.FindStringSubmatch(string(p))
-	if len(matches) > 0 {
-		httpStatus, latency := parseFromGinLog(matches)
-		return o.writeLogs(p, o.LogTypes[1], WithHttpStatus(httpStatus), WithLatency(latency))
+	ginLog, err := NewGinLog(p)
+	if err == nil {
+		return o.writeLogs(p, o.LogTypes[1], WithHttpStatus(ginLog.HttpStatus), WithLatency(ginLog.Latency))
 	}
 	return o.writeLogs(p, o.LogTypes[0])
 }
@@ -81,7 +80,7 @@ func (o *OmsLogger) postData(body []byte, logType LogType) error {
 	resource := "/api/logs"
 	contentLength := len(body)
 
-	// Azure doesn't support UTC so we need to change it to GMT
+	// Azure doesn't support UTC, so we need to change it to GMT
 	rfc1123date := strings.Replace(time.Now().UTC().Format(time.RFC1123), "UTC", "GMT", 1)
 	// Build signature
 	signature := o.buildSignature(rfc1123date, contentLength, http.MethodPost, contentType, resource)
