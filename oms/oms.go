@@ -91,7 +91,8 @@ func (o *OmsLogger) postData(body []byte, logType LogType) error {
 	if err != nil {
 		return err
 	}
-	ctx, _ := context.WithTimeout(context.Background(), updateTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), updateTimeout)
+	defer cancel()
 	req = req.WithContext(ctx)
 
 	req.Header.Add("content-type", contentType)
