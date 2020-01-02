@@ -15,10 +15,10 @@ func TestNewGinLog(t *testing.T) {
 	}{
 		{
 			data: []byte("[GIN] 2019/08/15 - 02:02:09 | 200 |     485.408µs | 10.244.1.1 |   GET     /_/test-without-utc"),
-			want: &oms.GinLog{HttpStatus: 200, Latency: 0.485408},
+			want: &oms.GinLog{HttpStatus: 200, Latency: 0.485408, Client: "10.244.1.1", Method: "GET", Path: "/_/test-without-utc"},
 		}, {
 			data: []byte(`[GIN] 2019/11/30 - 03:42:32 | 404 [0m|    3.607119ms | 74.125.209.18 |  [0m GET     /blog/image.jpg`),
-			want: &oms.GinLog{HttpStatus: 404, Latency: 3.607119},
+			want: &oms.GinLog{HttpStatus: 404, Latency: 3.607119, Client: "74.125.209.18", Method: "GET", Path: "/blog/image.jpg"},
 		},
 	}
 	for _, tc := range testCases {

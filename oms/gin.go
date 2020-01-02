@@ -10,17 +10,23 @@ const (
 	ginPatternPrefix    = `\[GIN\]`
 	ginPatternTimestamp = `\s+\d{4}\/\d{2}\/\d{2}\s+-\s+\d{2}:\d{2}:\d{2}\s+`
 	ginPatternStatus    = `([[:cntrl:]]?\[\d+;\d+m)?\s+(\d{3})\s+([[:cntrl:]]?\[0m)?`
-	ginPatternLatency   = `\s+([\d\.]{1,13})(\p{L}?s)`
+	ginPatternLatency   = `\s+([\d\.]{1,13})(\p{L}?s)\s+`
+	ginPatternRemote    = `\s+([\d\.]{7,15})\s+`
+	ginPatternMethod    = `([[:cntrl:]]?\[\d+;\d+m)?\s+([[:cntrl:]]?\[0m)?\s+(\w+)\s+`
+	ginPatternPath      = `([^\s]+)`
 )
 
 var (
-	ginPattern    = fmt.Sprintf(`%s%s\|%s\|%s`, ginPatternPrefix, ginPatternTimestamp, ginPatternStatus, ginPatternLatency)
+	ginPattern    = fmt.Sprintf(`%s%s\|%s\|%s\|%s\|%s%s`, ginPatternPrefix, ginPatternTimestamp, ginPatternStatus, ginPatternLatency, ginPatternRemote, ginPatternMethod, ginPatternPath)
 	ginLogMatcher = regexp.MustCompile(ginPattern)
 )
 
 type GinLog struct {
 	HttpStatus int
 	Latency    float64
+	Client     string
+	Method     string
+	Path       string
 }
 
 func NewGinLog(b []byte) (*GinLog, error) {
@@ -35,6 +41,9 @@ func newGinLog(matches []string) *GinLog {
 	return &GinLog{
 		HttpStatus: parseHttpStatus(matches[2]),
 		Latency:    parseLatency(matches[4], matches[5]),
+		Client:     matches[6],
+		Method:     matches[9],
+		Path:       matches[10],
 	}
 }
 
