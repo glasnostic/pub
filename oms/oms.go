@@ -22,12 +22,10 @@ var (
 	// Thinking of how many logging messages we will receive
 	// in a time duration "updateTimeout".
 	bufferSize = 1024
-	// updateTimeout for preventing sending logs to Azure takes too
+	// updateTimeout is for preventing sending logs to Azure takes too
 	// much time and eventually blocks the log writer.
 	updateTimeout = time.Second * 10
-)
 
-var (
 	updatePeriod = time.Minute
 )
 
@@ -77,9 +75,21 @@ func (o *OmsLogger) buildSignature(date string, length int, method string, conte
 	return authorization
 }
 
-func (o *OmsLogger) postData(body []byte, logType LogType) error {
-	contentType := "application/json"
-	resource := "/api/logs"
+func (o *OmsLogger) doPostRequest(ctx context.Context, body []byte, logType LogType) error {
+	req, err := o.newPostRequest(body, logType)
+	if err != nil {
+		return err
+	}
+	req = req.WithContext(ctx)
+	if _, err := o.client.Do(req); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (o *OmsLogger) newPostRequest(body []byte, logType LogType) (*http.Request, error) {
+	const contentType = "application/json"
+	const resource = "/api/logs"
 	contentLength := len(body)
 
 	// Azure doesn't support UTC, so we need to change it to GMT
@@ -90,22 +100,14 @@ func (o *OmsLogger) postData(body []byte, logType LogType) error {
 
 	req, err := http.NewRequest(http.MethodPost, uri, bytes.NewBuffer(body))
 	if err != nil {
-		return err
+		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), updateTimeout)
-	defer cancel()
-	req = req.WithContext(ctx)
-
 	req.Header.Add("content-type", contentType)
 	req.Header.Add("Authorization", signature)
 	req.Header.Add("Log-Type", logType)
 	req.Header.Add("x-ms-date", rfc1123date)
 	req.Header.Add("time-generated-field", "time_generated")
-
-	if _, err := o.client.Do(req); err != nil {
-		return err
-	}
-	return nil
+	return req, nil
 }
 
 func (o *OmsLogger) run() {
@@ -114,21 +116,27 @@ func (o *OmsLogger) run() {
 		select {
 		case <-tick:
 			for logType, entries := range o.batches {
-				if len(entries) == 0 {
-					continue
-				}
-				data, err := json.Marshal(entries)
-				if err != nil {
-					continue
-				}
-				if err := o.postData(data, logType); err != nil {
-					log.Println("[OMS] Failed to send log messages to Azure:", err)
-				}
-				o.batches[logType] = make([]*logEntry, 0, len(entries))
+				o.sendLogs(logType, entries)
 			}
-
 		case log := <-o.queue:
 			o.batches[log.LogType] = append(o.batches[log.LogType], &log)
 		}
 	}
+}
+
+// sendLogs should be only called by run()
+func (o *OmsLogger) sendLogs(logType LogType, entries []*logEntry) {
+	if len(entries) == 0 {
+		return
+	}
+	data, err := json.Marshal(entries)
+	if err != nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), updateTimeout)
+	defer cancel()
+	if err := o.doPostRequest(ctx, data, logType); err != nil {
+		log.Println("[OMS] Failed to send log messages to Azure:", err)
+	}
+	o.batches[logType] = make([]*logEntry, 0, len(entries))
 }
