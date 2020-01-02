@@ -11,6 +11,8 @@ type logEntry struct {
 	TimeGenerated string   `json:"time_generated"`
 	Latency       *float64 `json:"latency,omitempty"`
 	Status        *int     `json:"http_status,omitempty"`
+	Method        *string  `json:"http_method,omitempty"`
+	Path          *string  `jsno:"http_path,omitempty"`
 	LogType       LogType  `json:"-"`
 }
 
