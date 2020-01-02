@@ -26,7 +26,7 @@ type GinLog struct {
 func NewGinLog(b []byte) (*GinLog, error) {
 	matches := ginLogMatcher.FindStringSubmatch(string(b))
 	if len(matches) <= 0 {
-		return nil, fmt.Errorf("invalid gin logging message")
+		return nil, ErrInvalidGinLog
 	}
 	return newGinLog(matches), nil
 }
