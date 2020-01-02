@@ -37,6 +37,7 @@ type OmsLogger struct {
 	LogTypes      []LogType
 	GinLogMatcher *regexp.Regexp
 
+	client  *http.Client
 	queue   chan logEntry
 	batches map[LogType][]*logEntry
 }
@@ -48,6 +49,7 @@ func NewOmsLogger(customerId, sharedKey, logTypePrefix LogType) *OmsLogger {
 		LogTypes:      []LogType{fmt.Sprintf("%s_LOGS", logTypePrefix), fmt.Sprintf("%s_HTTP", logTypePrefix)},
 		GinLogMatcher: regexp.MustCompile(ginPattern),
 
+		client:  &http.Client{},
 		queue:   make(chan logEntry, bufferSize),
 		batches: make(map[LogType][]*logEntry),
 	}
@@ -86,7 +88,6 @@ func (o *OmsLogger) postData(body []byte, logType LogType) error {
 	signature := o.buildSignature(rfc1123date, contentLength, http.MethodPost, contentType, resource)
 	uri := fmt.Sprintf("https://%s.ods.opinsights.azure.com%s?api-version=2016-04-01", o.CustomerId, resource)
 
-	client := &http.Client{}
 	req, err := http.NewRequest(http.MethodPost, uri, bytes.NewBuffer(body))
 	if err != nil {
 		return err
@@ -101,7 +102,7 @@ func (o *OmsLogger) postData(body []byte, logType LogType) error {
 	req.Header.Add("x-ms-date", rfc1123date)
 	req.Header.Add("time-generated-field", "time_generated")
 
-	if _, err := client.Do(req); err != nil {
+	if _, err := o.client.Do(req); err != nil {
 		return err
 	}
 	return nil
