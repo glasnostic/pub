@@ -70,7 +70,9 @@ func (o *OmsLogger) run() {
 				}
 				if err := o.sendLogs(logType, entries); err != nil {
 					log.Println("[OMS] Failed to send log messages to Azure:", err)
+					continue
 				}
+				o.batches[logType] = make([]*logEntry, 0, len(entries))
 			}
 		case log := <-o.queue:
 			o.batches[log.LogType] = append(o.batches[log.LogType], &log)
@@ -84,6 +86,7 @@ func (o *OmsLogger) sendLogs(logType LogType, entries []*logEntry) error {
 	if err != nil {
 		return err
 	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), updateTimeout)
 	defer cancel()
 
@@ -97,7 +100,7 @@ func (o *OmsLogger) sendLogs(logType LogType, entries []*logEntry) error {
 		return err
 	}
 	defer res.Body.Close()
+
 	_, _ = ioutil.ReadAll(res.Body)
-	o.batches[logType] = make([]*logEntry, 0, len(entries))
 	return nil
 }
